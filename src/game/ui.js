@@ -1,4 +1,5 @@
 import { ORE_PRICES, ORE_NAMES, UPGRADE_DEFS, TILE_SIZE, SURFACE_Y, DEPTH_BONUS_MULTIPLIER } from './constants.js';
+import { QUEST_TYPE_NAMES, QUEST_TYPE_ICONS, QUEST_STARS } from './quests.js';
 
 export class UIManager {
   constructor(game) {
@@ -6,11 +7,24 @@ export class UIManager {
     this.warningTimeout = null;
     this.setupShopButtons();
     this.setupTeleportButton();
+    this.setupQuestPanelButtons();
   }
 
   setupTeleportButton() {
     document.getElementById('teleportBtn').addEventListener('click', () => {
       this.game.tryTeleport();
+    });
+  }
+
+  setupQuestPanelButtons() {
+    document.getElementById('closeQuestPanelBtn').addEventListener('click', () => {
+      this.closeQuestPanel();
+    });
+
+    document.getElementById('refreshQuestsBtn').addEventListener('click', () => {
+      this.game.questManager.generateAvailableQuests(3);
+      this.updateQuestPanel();
+      this.showWarning('任务列表已刷新', 1500, 'text-blue-300');
     });
   }
 
@@ -96,6 +110,7 @@ export class UIManager {
     document.getElementById('oreRuby').textContent = p.cargo.ruby;
 
     this.updateTeleportUI();
+    this.updateQuestTracker();
     this.checkWarnings();
   }
 
@@ -298,5 +313,240 @@ export class UIManager {
 
   hideHUD() {
     document.getElementById('hud').classList.add('hidden');
+  }
+
+  updateQuestTracker() {
+    const quests = this.game.questManager.getActiveQuests();
+    const tracker = document.getElementById('questTracker');
+    const countEl = document.getElementById('activeQuestCount');
+    const listEl = document.getElementById('questTrackerList');
+
+    if (quests.length === 0) {
+      tracker.classList.add('hidden');
+      return;
+    }
+
+    tracker.classList.remove('hidden');
+    countEl.textContent = quests.length;
+
+    listEl.innerHTML = '';
+    const displayQuests = quests.slice(0, 3);
+
+    for (const quest of displayQuests) {
+      const div = document.createElement('div');
+      div.className = 'bg-black/40 rounded p-2 border border-amber-800/50';
+
+      const starData = QUEST_STARS[quest.stars];
+      const timeText = quest.timeLimit > 0
+        ? `<span class="text-orange-400">⏱ ${this.game.questManager.formatTime(quest.timeRemaining)}</span>`
+        : '';
+
+      div.innerHTML = `
+        <div class="flex justify-between items-start mb-1">
+          <span class="text-amber-300 font-bold text-xs">${QUEST_TYPE_ICONS[quest.type]} ${quest.title}</span>
+        </div>
+        <div class="w-full h-1.5 bg-gray-700 rounded-full overflow-hidden mb-1">
+          <div class="h-full bg-gradient-to-r from-amber-600 to-yellow-400 transition-all" style="width: ${quest.progress}%"></div>
+        </div>
+        <div class="flex justify-between text-xs text-gray-400">
+          <span>进度: ${Math.floor(quest.progress)}%</span>
+          ${timeText}
+        </div>
+      `;
+
+      listEl.appendChild(div);
+    }
+
+    if (quests.length > 3) {
+      const moreDiv = document.createElement('div');
+      moreDiv.className = 'text-center text-gray-500 text-xs';
+      moreDiv.textContent = `还有 ${quests.length - 3} 个任务...`;
+      listEl.appendChild(moreDiv);
+    }
+  }
+
+  openQuestPanel() {
+    if (!this.game.player.isOnSurface()) {
+      this.showWarning('需要返回地面才能打开任务面板！', 1500);
+      return false;
+    }
+
+    this.updateQuestPanel();
+    document.getElementById('questPanel').classList.remove('hidden');
+    document.getElementById('questPanel').classList.add('flex');
+    this.game.paused = true;
+    return true;
+  }
+
+  closeQuestPanel() {
+    document.getElementById('questPanel').classList.add('hidden');
+    document.getElementById('questPanel').classList.remove('flex');
+    this.game.paused = false;
+  }
+
+  isQuestPanelOpen() {
+    return !document.getElementById('questPanel').classList.contains('hidden');
+  }
+
+  updateQuestPanel() {
+    const qm = this.game.questManager;
+    const p = this.game.player;
+
+    document.getElementById('questPanelGold').textContent = Math.floor(p.gold);
+    document.getElementById('questPlayerLevel').textContent = qm.playerLevel;
+    document.getElementById('totalCompletedQuests').textContent = qm.totalCompleted;
+    document.getElementById('activeQuestCountPanel').textContent = qm.activeQuests.length;
+
+    this.updateAvailableQuestsList();
+    this.updateActiveQuestsList();
+  }
+
+  updateAvailableQuestsList() {
+    const qm = this.game.questManager;
+    const listEl = document.getElementById('availableQuestsList');
+    const quests = qm.getAvailableQuests();
+
+    listEl.innerHTML = '';
+
+    if (quests.length === 0) {
+      listEl.innerHTML = '<div class="text-gray-500 text-center py-4">暂无可用任务，点击刷新按钮获取新任务</div>';
+      return;
+    }
+
+    for (const quest of quests) {
+      const div = this.createQuestCard(quest, 'available');
+      listEl.appendChild(div);
+    }
+  }
+
+  updateActiveQuestsList() {
+    const qm = this.game.questManager;
+    const listEl = document.getElementById('activeQuestsList');
+    const quests = qm.getActiveQuests();
+
+    listEl.innerHTML = '';
+
+    if (quests.length === 0) {
+      listEl.innerHTML = '<div class="text-gray-500 text-center py-4">暂无进行中的任务</div>';
+      return;
+    }
+
+    for (const quest of quests) {
+      const div = this.createQuestCard(quest, 'active');
+      listEl.appendChild(div);
+    }
+  }
+
+  createQuestCard(quest, mode) {
+    const div = document.createElement('div');
+    div.className = 'bg-black/50 rounded-lg p-3 border-2 transition-all hover:border-amber-500/50';
+
+    const starData = QUEST_STARS[quest.stars];
+    const stars = '⭐'.repeat(quest.stars);
+
+    let progressInfo = '';
+    let actionButton = '';
+
+    if (mode === 'available') {
+      const canAccept = this.game.questManager.activeQuests.length < 5;
+      actionButton = `
+        <button class="w-full mt-2 py-1.5 px-3 rounded text-xs font-bold transition-all ${
+          canAccept
+            ? 'bg-green-700 hover:bg-green-600 text-white border border-green-500'
+            : 'bg-gray-700 text-gray-500 cursor-not-allowed border border-gray-600'
+        }" ${canAccept ? `data-accept="${quest.id}"` : 'disabled'}>
+          📥 接受任务
+        </button>
+      `;
+    } else {
+      const progressText = this.getQuestProgressText(quest);
+      const timeText = quest.timeLimit > 0
+        ? `<div class="text-orange-400 text-xs mt-1">⏱ 剩余时间: ${this.game.questManager.formatTime(quest.timeRemaining)}</div>`
+        : '';
+
+      progressInfo = `
+        <div class="mt-2">
+          <div class="flex justify-between text-xs text-gray-400 mb-1">
+            <span>进度</span>
+            <span>${Math.floor(quest.progress)}%</span>
+          </div>
+          <div class="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
+            <div class="h-full bg-gradient-to-r from-green-600 to-emerald-400 transition-all" style="width: ${quest.progress}%"></div>
+          </div>
+          <div class="text-xs text-gray-400 mt-1">${progressText}</div>
+          ${timeText}
+        </div>
+      `;
+
+      actionButton = `
+        <button class="w-full mt-2 py-1.5 px-3 rounded text-xs font-bold bg-red-800 hover:bg-red-700 text-white border border-red-600 transition-all" data-abandon="${quest.id}">
+          ❌ 放弃任务
+        </button>
+      `;
+    }
+
+    div.innerHTML = `
+      <div class="flex justify-between items-start mb-2">
+        <div>
+          <div class="text-amber-300 font-bold text-sm">${QUEST_TYPE_ICONS[quest.type]} ${quest.title}</div>
+          <div class="text-gray-400 text-xs">${QUEST_TYPE_NAMES[quest.type]} ${quest.chainId ? '📿 任务链' : ''}</div>
+        </div>
+        <div class="text-right">
+          <div class="text-yellow-400 text-sm font-bold">💰 $${quest.reward}</div>
+          <div class="text-xs" style="color: ${starData.color}">${stars}</div>
+        </div>
+      </div>
+      <div class="text-gray-300 text-xs leading-relaxed">${quest.description}</div>
+      ${progressInfo}
+      ${actionButton}
+    `;
+
+    if (mode === 'available') {
+      const acceptBtn = div.querySelector('[data-accept]');
+      if (acceptBtn) {
+        acceptBtn.addEventListener('click', () => {
+          const result = this.game.questManager.acceptQuest(quest.id);
+          if (result.success) {
+            this.showWarning(`✅ 已接受任务: ${quest.title}`, 2000, 'text-green-400');
+            this.game.npcManager.showGreetingDialog();
+          } else {
+            this.showWarning(`❌ ${result.reason}`, 2000, 'text-red-400');
+          }
+          this.updateQuestPanel();
+        });
+      }
+    } else {
+      const abandonBtn = div.querySelector('[data-abandon]');
+      if (abandonBtn) {
+        abandonBtn.addEventListener('click', () => {
+          const result = this.game.questManager.abandonQuest(quest.id);
+          if (result.success) {
+            this.showWarning(`已放弃任务: ${quest.title}`, 1500, 'text-yellow-400');
+          }
+          this.updateQuestPanel();
+        });
+      }
+    }
+
+    return div;
+  }
+
+  getQuestProgressText(quest) {
+    switch (quest.type) {
+      case 'collect':
+        return `已采集: ${quest.collected || 0}/${quest.target.amount}`;
+      case 'clear':
+        return `已击杀: ${quest.killed || 0}/${quest.target.amount}`;
+      case 'explore': {
+        const currentDepth = Math.max(0, this.game.player.tileY - SURFACE_Y);
+        return `最深探索: ${currentDepth}/${quest.target.targetDepth}m`;
+      }
+      case 'build':
+        return quest.built ? '已完成建造' : '未完成';
+      case 'escort':
+        return `护送进度: ${Math.floor(quest.escortProgress || 0)}%`;
+      default:
+        return `进度: ${Math.floor(quest.progress)}%`;
+    }
   }
 }

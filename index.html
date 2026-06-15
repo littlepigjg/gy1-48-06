@@ -57,6 +57,7 @@
           </div>
         </div>
 
+        <div class="flex flex-col gap-3">
         <div class="bg-black/70 rounded-lg p-4 space-y-2 border-2 border-green-600/50">
           <div class="text-green-400 font-game text-xs mb-2">采矿信息</div>
           <div class="text-yellow-300 text-sm">💰 金币: <span id="goldText">0</span></div>
@@ -70,6 +71,19 @@
             <div>💚 祖母绿: <span id="oreEmerald">0</span></div>
             <div>❤️ 红宝石: <span id="oreRuby">0</span></div>
           </div>
+        </div>
+
+        <div id="questTracker" class="bg-black/70 rounded-lg p-3 space-y-2 border-2 border-amber-600/50 max-w-xs hidden">
+          <div class="flex justify-between items-center mb-1">
+            <span class="text-amber-400 font-game text-xs">📜 任务追踪</span>
+            <span class="text-xs text-gray-400"><span id="activeQuestCount">0</span>/5</span>
+          </div>
+          <div id="questTrackerList" class="space-y-2 text-xs">
+          </div>
+          <div class="text-center text-gray-500 text-xs pt-1 border-t border-gray-700">
+            按 E 键打开任务面板
+          </div>
+        </div>
         </div>
 
         <div class="absolute top-4 left-1/2 transform -translate-x-1/2 pointer-events-auto">
@@ -107,6 +121,7 @@
           <span>空格 钻探</span>
           <span>X 攻击</span>
           <span>T 紧急回城</span>
+          <span>E 任务面板</span>
           <span>ESC 商店</span>
         </div>
       </div>
@@ -175,6 +190,42 @@
         <div class="flex justify-center gap-4">
           <button id="closeShopBtn" class="bg-yellow-700 hover:bg-yellow-600 text-white px-8 py-3 rounded-lg border-2 border-yellow-500 font-bold transition-all">
             ⬇️ 继续采矿
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="questPanel" class="absolute inset-0 bg-black/80 hidden items-center justify-center z-50">
+      <div class="bg-gradient-to-b from-stone-800 to-stone-900 rounded-xl p-6 max-w-5xl w-full mx-4 border-4 border-amber-600 shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div class="flex justify-between items-center mb-4">
+          <h2 class="text-2xl text-amber-400 font-game">📜 任务大厅</h2>
+          <div class="flex items-center gap-4">
+            <span class="text-amber-300 text-sm">等级: <span id="questPlayerLevel">1</span></span>
+            <span class="text-green-300 text-sm">已完成: <span id="totalCompletedQuests">0</span></span>
+            <span class="text-yellow-300 text-sm">💰 <span id="questPanelGold">0</span></span>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+          <div class="bg-black/40 rounded-lg p-4 border border-amber-800">
+            <h3 class="text-amber-400 font-bold mb-3 text-base">📋 可接任务</h3>
+            <div id="availableQuestsList" class="space-y-3 text-sm max-h-96 overflow-y-auto">
+            </div>
+          </div>
+
+          <div class="bg-black/40 rounded-lg p-4 border border-green-800">
+            <h3 class="text-green-400 font-bold mb-3 text-base">📊 进行中 (<span id="activeQuestCountPanel">0</span>/5)</h3>
+            <div id="activeQuestsList" class="space-y-3 text-sm max-h-96 overflow-y-auto">
+            </div>
+          </div>
+        </div>
+
+        <div class="flex justify-center gap-4 mt-4">
+          <button id="refreshQuestsBtn" class="bg-blue-700 hover:bg-blue-600 text-white px-6 py-2 rounded-lg border-2 border-blue-500 font-bold transition-all text-sm">
+            🔄 刷新任务
+          </button>
+          <button id="closeQuestPanelBtn" class="bg-amber-700 hover:bg-amber-600 text-white px-8 py-2 rounded-lg border-2 border-amber-500 font-bold transition-all">
+            关闭
           </button>
         </div>
       </div>

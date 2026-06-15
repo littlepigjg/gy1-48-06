@@ -7,6 +7,8 @@ import { UIManager } from './ui.js';
 import { ParticleSystem } from './particles.js';
 import { HazardManager } from './hazards.js';
 import { TeleportSystem } from './teleport.js';
+import { QuestManager } from './quests.js';
+import { NPCManager } from './questNPC.js';
 
 export class Game {
   constructor(canvas) {
@@ -37,6 +39,8 @@ export class Game {
     this.particles = new ParticleSystem();
     this.hazards = new HazardManager();
     this.teleport = new TeleportSystem();
+    this.questManager = new QuestManager(this);
+    this.npcManager = new NPCManager();
     this.collapseTimer = 0;
 
     this.baseBuildingX = Math.floor(WORLD_WIDTH / 2) - 3;
@@ -53,11 +57,24 @@ export class Game {
     const startY = SURFACE_Y - 1;
 
     for (let dy = 0; dy < 5; dy++) {
-      for (let dx = -1; dx <= 1; dx++) {
+      for (let dx = -8; dx <= 12; dx++) {
         const tx = startX + dx;
         const ty = SURFACE_Y + dy;
         if (this.world.inBounds(tx, ty)) {
           const idx = this.world.getIndex(tx, ty);
+          this.world.tiles[idx] = TILE_TYPES.EMPTY;
+          this.world.tileHealth[idx] = 0;
+          this.world.dugTiles[idx] = 1;
+        }
+      }
+    }
+
+    for (let dx = -8; dx <= 12; dx++) {
+      const tx = startX + dx;
+      const ty = SURFACE_Y - 1;
+      if (this.world.inBounds(tx, ty)) {
+        const idx = this.world.getIndex(tx, ty);
+        if (this.world.tiles[idx] !== TILE_TYPES.EMPTY) {
           this.world.tiles[idx] = TILE_TYPES.EMPTY;
           this.world.tileHealth[idx] = 0;
           this.world.dugTiles[idx] = 1;
@@ -71,8 +88,72 @@ export class Game {
     this.particles.clear();
     this.hazards.clear();
     this.teleport = new TeleportSystem();
+    this.questManager = new QuestManager(this);
+    this.npcManager = new NPCManager();
     this.stats = { blocksDug: 0, enemiesKilled: 0 };
     this.collapseTimer = 0;
+
+    this.npcManager.createQuestNPC(this.baseBuildingX);
+    this.questManager.generateAvailableQuests(3);
+
+    this.createDemoQuestChain();
+
+    const questNPC = this.npcManager.npcs.find(n => n.constructor.name === 'QuestNPC');
+    if (questNPC) {
+      questNPC.showDialog('欢迎来到采矿基地！按 E 键查看任务', 10);
+      questNPC.showNotification(8);
+    }
+  }
+
+  createDemoQuestChain() {
+    const chainQuests = [
+      {
+        type: 'collect',
+        stars: 1,
+        title: '⭐ 新手采集',
+        description: '为基地采集第一批煤炭资源。',
+        reward: 50,
+        timeLimit: 300,
+        target: { oreType: 'coal', amount: 5 }
+      },
+      {
+        type: 'collect',
+        stars: 2,
+        title: '⭐⭐ 铁矿筹备',
+        description: '采集足够的铁矿用于装备升级。',
+        reward: 120,
+        timeLimit: 300,
+        target: { oreType: 'iron', amount: 8 }
+      },
+      {
+        type: 'explore',
+        stars: 3,
+        title: '⭐⭐⭐ 深度探索',
+        description: '探索更深的地下区域，发现新的矿脉。',
+        reward: 250,
+        timeLimit: 400,
+        target: { targetDepth: 80, exploreArea: 200 }
+      }
+    ];
+
+    this.questManager.createQuestChain('newbie_mining', chainQuests.map((q, i) => {
+      const quest = {
+        ...q,
+        id: 'chain_newbie_' + i,
+        status: 'available',
+        progress: 0,
+        chainId: 'newbie_mining',
+        chainOrder: i,
+        acceptedAt: null,
+        completedAt: null
+      };
+
+      if (q.type === 'collect') {
+        quest.collected = 0;
+      }
+
+      return quest;
+    }));
   }
 
   setupInput() {
@@ -121,10 +202,25 @@ export class Game {
         case 'Escape':
           if (this.ui.isShopOpen()) {
             this.ui.closeShop();
+          } else if (this.ui.isQuestPanelOpen()) {
+            this.ui.closeQuestPanel();
           } else {
             this.ui.openShop();
           }
           e.preventDefault();
+          break;
+        case 'e':
+        case 'E':
+          if (this.ui.isQuestPanelOpen()) {
+            this.ui.closeQuestPanel();
+          } else {
+            const nearbyNPC = this.npcManager.getNearbyNPC(this.player);
+            if (nearbyNPC || this.player.isOnSurface()) {
+              this.ui.openQuestPanel();
+            } else {
+              this.ui.showWarning('需要靠近任务NPC才能打开任务面板', 1500);
+            }
+          }
           break;
       }
     });
@@ -213,7 +309,8 @@ export class Game {
       this.particles,
       this.baseBuildingX,
       this.hazards,
-      this.teleport
+      this.teleport,
+      this.npcManager
     );
 
     this.ui.updateHUD();
@@ -238,6 +335,9 @@ export class Game {
     });
 
     this.enemies.update(dt, this.player, this.world);
+    this.npcManager.update(dt, this.player);
+    this.questManager.update(dt);
+    this.checkNPCInteraction();
     this.handleDigging(dt);
     this.handleShooting(dt);
     this.updateBullets(dt);
@@ -503,6 +603,29 @@ export class Game {
         this._oxyWarned = true;
         setTimeout(() => this._oxyWarned = false, 5000);
       }
+    }
+  }
+
+  checkNPCInteraction() {
+    const nearbyNPC = this.npcManager.getNearbyNPC(this.player);
+    if (nearbyNPC && !this._nearNPC) {
+      this._nearNPC = true;
+      nearbyNPC.showDialog('你好，冒险者！按 E 键查看可用任务。', 8);
+      if (this.questManager.availableQuests.length > 0) {
+        nearbyNPC.showNotification(5);
+      }
+    } else if (nearbyNPC && this._nearNPC) {
+      if (!nearbyNPC.dialogBubble && Math.random() < 0.002) {
+        const messages = [
+          '按 E 键查看任务！',
+          '完成任务获得丰厚奖励！',
+          '任务难度越高奖励越丰厚！',
+          '你可以同时追踪5个任务。'
+        ];
+        nearbyNPC.showDialog(messages[Math.floor(Math.random() * messages.length)], 4);
+      }
+    } else if (!nearbyNPC && this._nearNPC) {
+      this._nearNPC = false;
     }
   }
 
