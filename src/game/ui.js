@@ -532,21 +532,6 @@ export class UIManager {
   }
 
   getQuestProgressText(quest) {
-    switch (quest.type) {
-      case 'collect':
-        return `已采集: ${quest.collected || 0}/${quest.target.amount}`;
-      case 'clear':
-        return `已击杀: ${quest.killed || 0}/${quest.target.amount}`;
-      case 'explore': {
-        const currentDepth = Math.max(0, this.game.player.tileY - SURFACE_Y);
-        return `最深探索: ${currentDepth}/${quest.target.targetDepth}m`;
-      }
-      case 'build':
-        return quest.built ? '已完成建造' : '未完成';
-      case 'escort':
-        return `护送进度: ${Math.floor(quest.escortProgress || 0)}%`;
-      default:
-        return `进度: ${Math.floor(quest.progress)}%`;
-    }
+    return this.game.questManager.getProgressText(quest);
   }
 }

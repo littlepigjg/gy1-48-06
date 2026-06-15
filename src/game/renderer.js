@@ -42,7 +42,7 @@ export class Renderer {
     return { x: sx, y: sy };
   }
 
-  render(dt, world, player, enemies, bullets, particles, baseBuildingX, hazards = null, teleportSystem = null, npcManager = null) {
+  render(dt, world, player, enemies, bullets, particles, baseBuildingX, hazards = null, teleportSystem = null, npcManager = null, questManager = null) {
     if (this.shakeTime > 0) {
       this.shakeTime -= dt;
       if (this.shakeTime <= 0) this.shakeStrength = 0;
@@ -62,6 +62,9 @@ export class Renderer {
     this.renderEnemies(enemies);
     if (npcManager) {
       npcManager.render(this.ctx, (x, y) => this.worldToScreen(x, y));
+    }
+    if (questManager) {
+      questManager.renderEscortNPCs(this.ctx, (x, y) => this.worldToScreen(x, y));
     }
     this.renderPlayer(player, teleportSystem);
     this.renderDarkness(player);

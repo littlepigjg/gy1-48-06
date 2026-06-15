@@ -310,7 +310,8 @@ export class Game {
       this.baseBuildingX,
       this.hazards,
       this.teleport,
-      this.npcManager
+      this.npcManager,
+      this.questManager
     );
 
     this.ui.updateHUD();
@@ -325,7 +326,16 @@ export class Game {
 
   update(dt) {
     if (!this.teleport.isTeleporting()) {
+      const prevTileX = this.player.tileX;
+      const prevTileY = this.player.tileY;
       this.player.update(dt, this.world, this.input);
+
+      if (prevTileX !== this.player.tileX || prevTileY !== this.player.tileY) {
+        this.questManager.emitEvent('player_moved', {
+          tileX: this.player.tileX,
+          tileY: this.player.tileY
+        });
+      }
     }
 
     this.teleport.update(dt, this.player, this.world, this.particles, (cost) => {
@@ -377,8 +387,12 @@ export class Game {
         this.stats.blocksDug++;
         this.renderer.shake(1, 0.1);
 
+        this.questManager.emitEvent('tile_dug', { tileX: target.x, tileY: target.y });
+
         if (result.ore) {
           if (this.player.addOre(result.ore)) {
+            this.questManager.emitEvent('ore_collected', { oreType: result.ore, amount: 1 });
+
             this.particles.spawn(
               target.x * TILE_SIZE + TILE_SIZE / 2,
               target.y * TILE_SIZE + TILE_SIZE / 2,
@@ -585,6 +599,7 @@ export class Game {
       this.particles.spawnCircle(e.x, e.y, e.color, 12, 4);
       this.particles.spawn(e.x, e.y, '#FFD700', 6, 3, { gravity: -0.05 });
       this.stats.enemiesKilled++;
+      this.questManager.emitEvent('enemy_killed', { enemyType: e.type || 'worm', count: 1 });
     }
 
     this.enemies.enemies = this.enemies.enemies.filter(e => e.health > 0);
